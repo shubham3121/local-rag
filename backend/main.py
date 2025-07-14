@@ -24,7 +24,8 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import stat
-
+from pathlib import Path
+from contextlib import asynccontextmanager
 from .document_processor import DocumentProcessor
 from .embeddings import EmbeddingGenerator
 from .vector_store import VectorStore
@@ -34,7 +35,36 @@ from .config import Config
 # Ensure directories exist
 Config.ensure_directories()
 
-app = FastAPI(title="RAG Document Search")
+
+def create_pid_file() -> Path:
+        """Create a pid file for the application.
+        This is used to track the process id of the application.
+        It is used to ensure that the application is running and to 
+        prevent multiple instances of the application from running.
+        """
+        pid_file = Path("data/app.pid")
+        pid_file.parent.mkdir(exist_ok=True)
+        pid_file.touch()
+        pid_file.write_text(str(os.getpid()))
+        print(f"Created pid file: {pid_file}")
+        return pid_file
+
+
+# lifecycle 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create PID file on startup
+    pid_file = create_pid_file()
+    
+    yield
+    
+    # Cleanup on shutdown (remove pid file)
+    pid_file.unlink(missing_ok=True)
+    print("Cleanup complete")
+
+
+
+app = FastAPI(title="RAG Document Search", lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(
